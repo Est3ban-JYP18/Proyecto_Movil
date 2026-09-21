@@ -605,9 +605,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                    onPressed: () => _eliminarUsuario(u),
+                                    icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
+                                    tooltip: 'Editar Usuario',
+                                    onPressed: () => _abrirModalUsuario(usuario: u),
                                   ),
+                                  if (u.rol.toLowerCase().trim() != 'administrador')
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                      tooltip: 'Eliminar Usuario',
+                                      onPressed: () => _eliminarUsuario(u),
+                                    ),
                                 ],
                               ),
                             ),
@@ -622,12 +629,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     );
   }
 
-  void _abrirModalUsuario() {
-    final nombreCtrl = TextEditingController();
-    final apellidoCtrl = TextEditingController();
-    final correoCtrl = TextEditingController();
+  void _abrirModalUsuario({Usuario? usuario}) {
+    final bool esEdicion = usuario != null;
+
+    String nombresIniciales = '';
+    String apellidosIniciales = '';
+    if (usuario != null) {
+      final partes = usuario.nombre.trim().split(' ');
+      if (partes.length > 1) {
+        nombresIniciales = partes.first;
+        apellidosIniciales = partes.skip(1).join(' ');
+      } else {
+        nombresIniciales = usuario.nombre;
+      }
+    }
+
+    final nombreCtrl = TextEditingController(text: nombresIniciales);
+    final apellidoCtrl = TextEditingController(text: apellidosIniciales);
+    final correoCtrl = TextEditingController(text: usuario?.correo ?? '');
     final claveCtrl = TextEditingController();
     int rol = 3; // 1: Admin, 2: Contador, 3: Cliente
+    if (usuario != null) {
+      final r = usuario.rol.toLowerCase().trim();
+      if (r.contains('admin')) {
+        rol = 1;
+      } else if (r.contains('cont')) {
+        rol = 2;
+      } else {
+        rol = 3;
+      }
+    }
 
     showDialog(
       context: context,
@@ -636,20 +667,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           builder: (ctx, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text('Crear Usuario en MySQL', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0047AB))),
+              title: Text(
+                esEdicion ? 'Editar Usuario' : 'Crear Usuario en MySQL',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0047AB)),
+              ),
               content: SizedBox(
                 width: 400,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombres *', border: OutlineInputBorder())),
+                      TextField(
+                        controller: nombreCtrl,
+                        decoration: const InputDecoration(labelText: 'Nombres *', border: OutlineInputBorder()),
+                      ),
                       const SizedBox(height: 10),
-                      TextField(controller: apellidoCtrl, decoration: const InputDecoration(labelText: 'Apellidos *', border: OutlineInputBorder())),
+                      TextField(
+                        controller: apellidoCtrl,
+                        decoration: const InputDecoration(labelText: 'Apellidos *', border: OutlineInputBorder()),
+                      ),
                       const SizedBox(height: 10),
-                      TextField(controller: correoCtrl, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Correo Electrónico *', border: OutlineInputBorder())),
+                      TextField(
+                        controller: correoCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Correo Electrónico *', border: OutlineInputBorder()),
+                      ),
                       const SizedBox(height: 10),
-                      TextField(controller: claveCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Contraseña *', border: OutlineInputBorder())),
+                      TextField(
+                        controller: claveCtrl,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: esEdicion ? 'Nueva Contraseña (opcional)' : 'Contraseña *',
+                          hintText: esEdicion ? 'Dejar vacío para mantener la actual' : null,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<int>(
                         initialValue: rol,
@@ -670,20 +722,79 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
               actions: [
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0047AB), foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0047AB),
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () async {
-                    if (nombreCtrl.text.isEmpty || correoCtrl.text.isEmpty || claveCtrl.text.isEmpty) return;
+                    if (nombreCtrl.text.trim().isEmpty || correoCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Por favor complete los campos obligatorios'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    if (!esEdicion && claveCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('La contraseña es requerida para un nuevo usuario'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
                     Navigator.pop(ctx);
-                    await _adminService.crearUsuario(
-                      nombres: nombreCtrl.text.trim(),
-                      apellidos: apellidoCtrl.text.trim(),
-                      correo: correoCtrl.text.trim(),
-                      contrasena: claveCtrl.text.trim(),
-                      rol: rol,
-                    );
+                    try {
+                      if (esEdicion) {
+                        await _adminService.actualizarUsuario(
+                          usuario.id,
+                          nombres: nombreCtrl.text.trim(),
+                          apellidos: apellidoCtrl.text.trim(),
+                          correo: correoCtrl.text.trim(),
+                          contrasena: claveCtrl.text.trim().isEmpty ? null : claveCtrl.text.trim(),
+                          rol: rol,
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Usuario actualizado correctamente'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } else {
+                        await _adminService.crearUsuario(
+                          nombres: nombreCtrl.text.trim(),
+                          apellidos: apellidoCtrl.text.trim(),
+                          correo: correoCtrl.text.trim(),
+                          contrasena: claveCtrl.text.trim(),
+                          rol: rol,
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Usuario creado correctamente'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                     _cargarUsuarios();
                   },
-                  child: const Text('Crear Usuario'),
+                  child: Text(esEdicion ? 'Guardar Cambios' : 'Crear Usuario'),
                 ),
               ],
             );
@@ -694,6 +805,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   }
 
   void _eliminarUsuario(Usuario u) {
+    if (u.rol.toLowerCase().trim() == 'administrador') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No es posible eliminar al Administrador'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -705,7 +826,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.pop(ctx);
-              await _adminService.eliminarUsuario(u.id);
+              try {
+                await _adminService.eliminarUsuario(u.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Usuario eliminado correctamente'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al eliminar: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
               _cargarUsuarios();
             },
             child: const Text('Eliminar'),
