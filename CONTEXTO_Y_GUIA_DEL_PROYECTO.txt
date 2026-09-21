@@ -1,0 +1,150 @@
+================================================================================
+          TECNOMATIC MAV - CONTEXTO DEL PROYECTO, FUSIÓN Y GUÍA DE USO
+================================================================================
+Fecha: Septiembre 2026
+Estado: Módulos fusionados, APIs centralizadas y errores de conexión corregidos.
+================================================================================
+
+1. CONTEXTO GENERAL DEL PROYECTO
+--------------------------------------------------------------------------------
+El ecosistema de Tecnomatic está compuesto por tres carpetas/proyectos:
+
+A) Proyecto-tecnomaticmav:
+   - Contiene el backend en Node.js/Express ("backend/server.cjs") ejecutándose
+     en el puerto 3001.
+   - Conecta a una base de datos MySQL en el puerto 3307 ("tecnomaticmav").
+   - Contiene además el frontend web original desarrollado en React.
+
+B) tecnomatic_app:
+   - Proyecto secundario/antiguo en Flutter que contenía pantallas administrativas
+     sueltas (Inventario de productos, Usuarios, Pedidos/Facturas y Devoluciones),
+     con llamadas HTTP directas incrustadas dentro de los widgets.
+
+C) tecnomaticmav (PROYECTO PRINCIPAL):
+   - Es la aplicación Flutter definitiva (Móvil y Web).
+   - Posee la arquitectura limpia oficial:
+       * core/       -> Red (api_client), sesión (session_manager), tema y constantes.
+       * models/     -> Modelos de datos tipados (Usuario, Producto, Pedido, Devolución, etc.).
+       * services/   -> Centralización ESTRICTA de todas las APIs y llamadas al backend.
+       * screens/    -> Pantallas de la app (Auth, Tienda, Carrito, Perfil, Admin).
+       * widgets/    -> Componentes reutilizables.
+
+
+================================================================================
+2. ¿QUÉ SE ESTABA HACIENDO Y QUÉ SE IMPLEMENTÓ? (RESUMEN DE TRABAJO)
+================================================================================
+
+1. Solución al Error de Conexión ("Connection Error"):
+   - Causa identificada: El archivo "lib/core/network/api_client.dart" tenía una
+     IP estática desactualizada (192.168.80.19:3001). Cuando se abría en Chrome
+     o móvil, la petición moría por timeout.
+   - Solución implementada: Se configuró una detección dinámica con "kIsWeb":
+       * Si se abre en Web (Google Chrome): Conecta automáticamente a "http://localhost:3001".
+       * Si se abre en Celular Físico: Conecta a la IP local de tu PC "http://10.1.196.116:3001".
+
+2. Replicación de Autenticación y Registro al estilo React:
+   - Pantalla de Registro ("lib/screens/auth/register_screen.dart"):
+       * Réplica visual y de reglas de React: Validación de que nombres y
+         apellidos contengan solo letras, coincidencia estricta de contraseñas,
+         botones de ojo para mostrar/ocultar contraseñas y auto-login tras registrarse.
+   - Pantalla de Login ("lib/screens/auth/login_screen.dart"):
+       * Rediseño profesional con escudo de seguridad Tecnomatic, campos estilizados,
+         modal emergente para recuperación de contraseña y botón directo a Registro.
+   - Manejo de Sesión ("lib/core/session/session_manager.dart"):
+       * Guarda y administra el token JWT recibido del backend para autorizar
+         todas las peticiones del Administrador y Contador.
+
+3. Centralización Estricta de APIs y Endpoints en "lib/services/":
+   Se extrajeron todas las llamadas HTTP que estaban dispersas en "tecnomatic_app"
+   y se organizaron en servicios limpios:
+   - "lib/services/auth_service.dart":
+       * login, registro (/registro), obtenerPerfil, recuperarContrasena.
+   - "lib/services/producto_service.dart":
+       * getProductos, getProductoById, crearProducto (POST /productos),
+         actualizarProducto (PUT /productos/:id), eliminarProducto (DELETE /productos/:id).
+   - "lib/services/admin_service.dart":
+       * getUsuarios, actualizarUsuario, eliminarUsuario.
+       * getPedidos/Facturas, actualizarEstadoPedido (PUT /facturas/:id), eliminarPedido.
+       * getDevoluciones, actualizarEstadoDevolucion (Aprobar/Rechazar /devoluciones/:id).
+   - "lib/services/contador_service.dart":
+       * getEstadisticasFinancieras: Calcula ingresos totales, pedidos pagados vs pendientes
+         y ticket promedio a partir de los datos reales del backend.
+
+4. Fusión del Módulo de Administración y Contador:
+   - Se creó la pantalla "lib/screens/admin/admin_dashboard_screen.dart":
+       * Pestaña 1 (Productos/Inventario): Buscador en tiempo real, filtro por
+         categorías y stock, botón flotante "+ Producto", modal para crear y editar,
+         y confirmación para eliminar.
+       * Pestaña 2 (Pedidos/Facturas): Lista de facturas de clientes, detalles de
+         total y fecha, modal para cambiar estado (Pendiente, Pagado, Enviado, etc.).
+       * Pestaña 3 (Usuarios): Lista de usuarios registrados, cambio de rol
+         (Administrador, Contador, Cliente) y activación/desactivación de cuentas.
+       * Pestaña 4 (Devoluciones): Bandeja de solicitudes de devolución con motivos
+         y botones directos de "Aprobar" o "Rechazar".
+   - Integración con el Perfil ("lib/screens/profile/profile_screen.dart"):
+       * Al iniciar sesión como Administrador (rol 1) o Contador (rol 2), el menú
+         de Perfil muestra automáticamente los accesos a "Panel de Administración"
+         o "Reportes Financieros" y los lleva directo a las vistas fusionadas.
+
+
+================================================================================
+3. LO QUE DEBES HACER TÚ (PASO A PASO PARA EJECUTAR Y PROBAR)
+================================================================================
+
+PASO 1: Asegurarte de que MySQL esté prendido
+--------------------------------------------------------------------------------
+1. Abre tu panel de control de MySQL (XAMPP o el servicio que uses).
+2. Asegúrate de que MySQL esté corriendo en el puerto 3307.
+3. Verifica que la base de datos "tecnomaticmav" esté creada con sus tablas
+   (usuarios, productos, facturas, categorias, devoluciones, etc.).
+
+PASO 2: Iniciar el Backend Node.js
+--------------------------------------------------------------------------------
+1. Abre una terminal de comandos (PowerShell o CMD).
+2. Navega a la carpeta del backend:
+   cd C:\Users\Aprendiz\Documents\pro\Proyecto-tecnomaticmav\backend
+3. Enciende el servidor ejecutando:
+   node server.cjs
+4. Debe imprimir en consola:
+   - "Servidor corriendo en el puerto 3001"
+   - "Conectado exitosamente a la base de datos MySQL (puerto 3307)"
+* Nota: Deja esta terminal abierta mientras uses la aplicación.
+
+PASO 3: Ejecutar la aplicación Flutter
+--------------------------------------------------------------------------------
+Opción A: Para probarlo en Google Chrome (Web):
+1. Abre otra terminal.
+2. Navega a la carpeta del proyecto Flutter principal:
+   cd C:\Users\Aprendiz\Documents\pro\tecnomaticmav
+3. Ejecuta:
+   flutter run -d chrome
+
+Opción B: Para probarlo en tu Celular Físico:
+1. Conecta tu celular por cable USB con "Depuración USB" activada.
+2. Asegúrate de que tu celular y tu computador estén conectados a la MISMA RED WI-FI.
+   (La IP configurada actualmente en el proyecto es: 10.1.196.116).
+3. En la terminal de "tecnomaticmav", ejecuta:
+   flutter run
+
+PASO 4: Probar los roles y las vistas fusionadas
+--------------------------------------------------------------------------------
+1. Entrar como Administrador:
+   - Correo: admin@tecnomatic.com
+   - Contraseña: password (o admin123, según tengas en tu base de datos)
+   - Una vez adentro, ve a la pestaña "Perfil" en la barra inferior.
+   - Verás la opción "Panel de Administración".
+   - Al entrar podrás gestionar: Productos, Pedidos, Usuarios y Devoluciones.
+
+2. Entrar como Contador:
+   - Correo: contador@tecnomatic.com (o el usuario con rol 2)
+   - Ve a "Perfil" -> "Reportes Financieros".
+   - Verás el resumen de facturación, estado de pagos e ingresos.
+
+3. Entrar como Cliente o Registrar un nuevo usuario:
+   - Toca en "¿No tienes cuenta? Regístrate aquí".
+   - Rellena nombre, apellido, correo, teléfono y contraseñas.
+   - El sistema te registrará en MySQL y te iniciará sesión automáticamente.
+
+================================================================================
+¡Listo! Todo el sistema se encuentra integrado, centralizado y sincronizado.
+================================================================================
