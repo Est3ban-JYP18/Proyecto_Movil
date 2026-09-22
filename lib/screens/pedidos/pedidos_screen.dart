@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/session/session_manager.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/devolucion_model.dart';
@@ -698,13 +700,30 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                     onPressed: () async {
                                       final granted = await PermissionService.solicitarCamara(context);
                                       if (granted) {
-                                        setModalState(() {
-                                          evidenciaAdjunta = 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?w=500';
-                                        });
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Foto de evidencia capturada con la cámara.')),
+                                        try {
+                                          final picker = ImagePicker();
+                                          final XFile? foto = await picker.pickImage(
+                                            source: ImageSource.camera,
+                                            maxWidth: 1200,
+                                            maxHeight: 1200,
+                                            imageQuality: 85,
                                           );
+                                          if (foto != null) {
+                                            setModalState(() {
+                                              evidenciaAdjunta = foto.path;
+                                            });
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Foto capturada correctamente con la cámara.')),
+                                              );
+                                            }
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Error al abrir la cámara: $e')),
+                                            );
+                                          }
                                         }
                                       }
                                     },
@@ -723,13 +742,30 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                     onPressed: () async {
                                       final granted = await PermissionService.solicitarAlmacenamiento(context);
                                       if (granted) {
-                                        setModalState(() {
-                                          evidenciaAdjunta = 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500';
-                                        });
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Evidencia fotográfica seleccionada de galería.')),
+                                        try {
+                                          final picker = ImagePicker();
+                                          final XFile? foto = await picker.pickImage(
+                                            source: ImageSource.gallery,
+                                            maxWidth: 1200,
+                                            maxHeight: 1200,
+                                            imageQuality: 85,
                                           );
+                                          if (foto != null) {
+                                            setModalState(() {
+                                              evidenciaAdjunta = foto.path;
+                                            });
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Imagen seleccionada de la galería.')),
+                                              );
+                                            }
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Error al abrir galería: $e')),
+                                            );
+                                          }
                                         }
                                       }
                                     },
@@ -737,6 +773,64 @@ class _PedidosScreenState extends State<PedidosScreen> {
                                 ),
                               ],
                             ),
+                            if (evidenciaAdjunta != null) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: SizedBox(
+                                        width: 48,
+                                        height: 48,
+                                        child: evidenciaAdjunta!.startsWith('http')
+                                            ? Image.network(evidenciaAdjunta!, fit: BoxFit.cover)
+                                            : Image.file(
+                                                File(evidenciaAdjunta!),
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) => const Icon(
+                                                  Icons.image,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Foto adjunta',
+                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                          Text(
+                                            evidenciaAdjunta!.split(Platform.pathSeparator).last,
+                                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close, size: 18, color: Colors.red),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          evidenciaAdjunta = null;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

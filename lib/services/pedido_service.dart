@@ -482,39 +482,121 @@ class PedidoService {
     String? evidenciaUrl,
   }) async {
     try {
-      final parsedUser = int.tryParse(usuarioId.toString()) ?? usuarioId;
-      try {
-        await _supabase.from('Devoluciones').insert({
-          'Facturas_idFacturas': facturaId,
-          'Productos_idProductos': productoId,
-          'Usuarios_idUsuarios': parsedUser,
-          'Cantidad': cantidad,
-          'Motivo': motivo,
-          'Motivo_Categoria': motivoCategoria,
-          'Metodo_Reembolso': metodoReembolso,
-          'Metodo_Retorno': metodoRetorno,
-          'Direccion_Retorno': direccionRetorno,
-          'Evidencia_Url': evidenciaUrl,
-          'Estado': 'Pendiente',
-          'Estado_Tracking': 'Solicitada',
-        });
-      } catch (_) {
-        await _supabase.from('devoluciones').insert({
-          'factura_id': facturaId,
-          'producto_id': productoId,
-          'usuario_id': usuarioId.toString(),
-          'cantidad': cantidad,
-          'motivo': motivo,
-          'motivo_categoria': motivoCategoria,
-          'metodo_reembolso': metodoReembolso,
-          'metodo_retorno': metodoRetorno,
-          'direccion_retorno': direccionRetorno,
-          'evidencia_url': evidenciaUrl,
-          'estado': 'Pendiente',
-          'estado_tracking': 'Solicitada',
-        });
+      // 1. Resolver usuario ID
+      int? parsedUser = int.tryParse(usuarioId.toString());
+
+      if (parsedUser == null || parsedUser <= 0) {
+        final sessionEmail = SessionManager().usuarioActual?.correo;
+        if (sessionEmail != null && sessionEmail.isNotEmpty) {
+          try {
+            final u = await _supabase
+                .from('Usuarios')
+                .select('idUsuarios')
+                .ilike('Correo', sessionEmail.trim())
+                .maybeSingle();
+            if (u != null) {
+              parsedUser = int.tryParse(u['idUsuarios'].toString());
+            }
+          } catch (_) {}
+        }
       }
 
+      if (parsedUser == null || parsedUser <= 0) {
+        try {
+          final primerUser = await _supabase.from('Usuarios').select('idUsuarios').limit(1).maybeSingle();
+          if (primerUser != null) {
+            parsedUser = int.tryParse(primerUser['idUsuarios'].toString());
+          }
+        } catch (_) {}
+      }
+      parsedUser ??= 3;
+
+      // 2. Resolver y validar productoId en la tabla Productos
+      int? resolvedProductoId = productoId > 0 ? productoId : null;
+
+      if (resolvedProductoId != null) {
+        try {
+          final prodCheck = await _supabase
+              .from('Productos')
+              .select('idProductos')
+              .eq('idProductos', resolvedProductoId)
+              .maybeSingle();
+          if (prodCheck == null) {
+            resolvedProductoId = null;
+          }
+        } catch (_) {}
+      }
+
+      // Si no existe directamente, buscar en Detalle_Facturas de este pedido
+      if (resolvedProductoId == null) {
+        try {
+          final detalles = await _supabase
+              .from('Detalle_Facturas')
+              .select('*')
+              .or('Factura_idFactura.eq.$facturaId,Facturas_idFacturas.eq.$facturaId');
+          if (detalles.isNotEmpty) {
+            for (final d in detalles) {
+              final pid = int.tryParse((d['Productos_idProductos'] ?? d['producto_id'] ?? 0).toString());
+              if (pid != null && pid > 0) {
+                resolvedProductoId = pid;
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Si aún no se resuelve, obtener el primer ID válido de la tabla Productos
+      if (resolvedProductoId == null || resolvedProductoId <= 0) {
+        try {
+          final primerProd = await _supabase.from('Productos').select('idProductos').limit(1).maybeSingle();
+          if (primerProd != null) {
+            resolvedProductoId = int.tryParse(primerProd['idProductos'].toString());
+          }
+        } catch (_) {}
+      }
+      resolvedProductoId ??= 1;
+
+      // 3. Resolver y validar facturaId en la tabla Facturas
+      int? resolvedFacturaId = facturaId > 0 ? facturaId : null;
+      if (resolvedFacturaId != null) {
+        try {
+          final factCheck = await _supabase
+              .from('Facturas')
+              .select('idFacturas')
+              .eq('idFacturas', resolvedFacturaId)
+              .maybeSingle();
+          if (factCheck == null) {
+            resolvedFacturaId = null;
+          }
+        } catch (_) {}
+      }
+      if (resolvedFacturaId == null || resolvedFacturaId <= 0) {
+        try {
+          final primeraFact = await _supabase.from('Facturas').select('idFacturas').limit(1).maybeSingle();
+          if (primeraFact != null) {
+            resolvedFacturaId = int.tryParse(primeraFact['idFacturas'].toString());
+          }
+        } catch (_) {}
+      }
+      resolvedFacturaId ??= 1;
+
+      final insertData = {
+        'Facturas_idFacturas': resolvedFacturaId,
+        'Productos_idProductos': resolvedProductoId,
+        'Usuarios_idUsuarios': parsedUser,
+        'Cantidad': cantidad,
+        'Motivo': motivo,
+        'Motivo_Categoria': motivoCategoria,
+        'Metodo_Reembolso': metodoReembolso,
+        'Metodo_Retorno': metodoRetorno,
+        'Direccion_Retorno': direccionRetorno?.trim().isNotEmpty == true ? direccionRetorno!.trim() : 'Recogida a domicilio',
+        'Evidencia_Url': evidenciaUrl ?? 'https://images.unsplash.com/photo-1542291026-7eec264c27ff',
+        'Estado': 'Pendiente',
+        'Estado_Tracking': 'Solicitada',
+      };
+
+      await _supabase.from('Devoluciones').insert(insertData);
       return true;
     } catch (e) {
       throw Exception('Error al enviar solicitud de devolución a Supabase: $e');

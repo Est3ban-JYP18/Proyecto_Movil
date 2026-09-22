@@ -118,7 +118,15 @@ class PedidoDetalleItem {
     }
 
     return PedidoDetalleItem(
-      idProducto: int.tryParse((json['producto_id'] ?? json['idProductos'] ?? json['idProducto'] ?? 0).toString()) ?? 0,
+      idProducto: int.tryParse((json['Productos_idProductos'] ??
+              json['Productos_idProducto'] ??
+              json['idProductos'] ??
+              json['producto_id'] ??
+              json['idProducto'] ??
+              json['id'] ??
+              0)
+          .toString()) ??
+          0,
       nombreProducto: nombre.isNotEmpty ? nombre : 'Producto',
       imagen: img,
       cantidad: int.tryParse((json['cantidad'] ?? json['Cantidad'] ?? 1).toString()) ?? 1,
