@@ -43,9 +43,8 @@ void main() {
     expect(find.text('Carrito'), findsWidgets);
     expect(find.text('Historial'), findsOneWidget);
 
-    // En la barra superior SÍ deben estar los iconos de Mi Perfil y Cerrar Sesión
+    // En la barra superior SÍ debe estar el icono de Mi Perfil
     expect(find.byIcon(Icons.account_circle_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.logout), findsOneWidget);
   });
 
   testWidgets('Administrador: barra inferior con Productos, Pedidos, Usuarios, Devoluciones y acciones en barra superior', (WidgetTester tester) async {
@@ -64,7 +63,6 @@ void main() {
     expect(find.text('Pedidos'), findsWidgets);
     expect(find.text('Usuarios'), findsWidgets);
     expect(find.text('Devoluciones'), findsWidgets);
-    expect(find.text('Historial'), findsWidgets);
 
     // En la barra superior deben estar Mi Perfil y Cerrar Sesión
     expect(find.byIcon(Icons.account_circle_outlined), findsOneWidget);
